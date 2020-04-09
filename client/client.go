@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/brown-csci1380/stencil-s20/raft/raft"
+	"github.com/brown-csci1380-s20/raft-jsokol2-mlitt2/raft"
 )
 
 // Client represents a client that connects to a known node in the Raft cluster

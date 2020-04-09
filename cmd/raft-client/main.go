@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/abiosoft/ishell"
-	"github.com/brown-csci1380/stencil-s20/raft/client"
-	"github.com/brown-csci1380/stencil-s20/raft/hashmachine"
+	"github.com/brown-csci1380-s20/raft-jsokol2-mlitt2/client"
+	"github.com/brown-csci1380-s20/raft-jsokol2-mlitt2/hashmachine"
 )
 
 func main() {

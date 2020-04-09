@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"path/filepath"
 
-	"github.com/brown-csci1380/stencil-s20/raft/hashmachine"
+	"github.com/brown-csci1380-s20/raft-jsokol2-mlitt2/hashmachine"
 )
 
 // CreateLocalCluster creates a new Raft cluster with the given config in the
