@@ -76,6 +76,7 @@ func (remote *RemoteNode) RemoveClientConn() {
 // connCheck checks the given error and removes the client connection if it's not nil
 func (remote *RemoteNode) connCheck(err error) error {
 	if err != nil {
+		time.Sleep(RPCTimeout)
 		remote.RemoveClientConn()
 	}
 	return err
