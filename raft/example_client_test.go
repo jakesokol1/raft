@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/brown-csci1380/stencil-s20/raft/hashmachine"
+	"github.com/brown-csci1380-s20/raft-jsokol2-mlitt2/hashmachine"
 	"golang.org/x/net/context"
 )
 
