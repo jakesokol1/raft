@@ -320,3 +320,4 @@ func (r *Node) GracefulExit() {
 	r.stableStore.Close()
 	r.server.GracefulStop()
 }
+
