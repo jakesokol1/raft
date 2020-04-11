@@ -10,13 +10,12 @@ func (r *Node) doFollower() stateFunction {
 	// follower state should do when it receives an incoming message on every
 	// possible channel.
 
-	//TODO: INITIAL WORK
-
+	//INITIAL WORK
+	timeout := randomTimeout(r.config.ElectionTimeout)
 
 	//EVALUATE CHANNELS
 	for {
 		//random timeout representing timeout to switch to candidate state
-		timeout := randomTimeout(r.config.ElectionTimeout)
 		select {
 		case _ = <-timeout:
 			return r.doCandidate
@@ -29,6 +28,18 @@ func (r *Node) doFollower() stateFunction {
 			voteCasted := r.handleRequestVote(&requestVoteMsg)
 			if voteCasted {
 				timeout = randomTimeout(r.config.ElectionTimeout)
+			}
+		case registerClientMsg := <-r.registerClient:
+			registerClientMsg.reply <- RegisterClientReply{
+				Status:               ClientStatus_NOT_LEADER,
+				ClientId:             0,
+				LeaderHint:           r.Leader,
+			}
+		case clientRequestMsg := <-r.clientRequest:
+			clientRequestMsg.reply <- ClientReply{
+				Status:               ClientStatus_NOT_LEADER,
+				Response:             nil,
+				LeaderHint:           r.Leader,
 			}
 		case shutdown := <-r.gracefulExit:
 			if shutdown {
@@ -67,8 +78,7 @@ func (r *Node) handleRequestVote(requestVoteMsg *RequestVoteMsg) (voteCasted boo
 		validCandidate = false
 	}
 	//check if candidate is at least as up to date with voter
-	if !isUpToDate(request.LastLogIndex, request.LastLogTerm,
-		r.stableStore.GetLog(r.stableStore.LastLogIndex())) {
+	if !isUpToDate(request.LastLogIndex, request.LastLogTerm, r.GetLog(r.LastLogIndex())) {
 		validCandidate = false
 	}
 	//issue requestVoteMsg accordingly and update currentTerm
@@ -91,15 +101,15 @@ func (r *Node) handleRequestVote(requestVoteMsg *RequestVoteMsg) (voteCasted boo
 }
 
 func isUpToDate(candidateIndex uint64, candidateTerm uint64, log *LogEntry) (upToDate bool) {
+	if log == nil {
+		return true
+	}
 	if candidateTerm > log.TermId {
 		return true
 	}
-
-	//TODO: Clarify that isUpToDate if indices of candidate and voter are equal.
 	if candidateTerm == log.TermId && candidateIndex >= log.Index {
 		return true
 	}
-
 	return false
 }
 
