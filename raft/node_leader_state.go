@@ -5,11 +5,54 @@ func (r *Node) doLeader() stateFunction {
 	r.Out("Transitioning to LeaderState")
 	r.State = LeaderState
 
-	// TODO: Students should implement this method
 	// Hint: perform any initial work, and then consider what a node in the
 	// leader state should do when it receives an incoming message on every
 	// possible channel.
-	return nil
+
+	// initial work
+	r.sendHeartbeats()
+	// receive messages on all channels
+	for {
+		//random timeout representing timeout to switch to candidate state
+		select {
+		case appendEntriesMsg := <-r.appendEntries:
+			// todo: how to handle another leader?
+			println("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
+		case requestVoteMsg := <-r.requestVote:
+			// todo @722. step down and vote if candidate is more up to date, otherwise reject vote
+			println("leader got requestVote: " + string(requestVoteMsg.request.Term))
+		case registerClientMsg := <-r.registerClient:
+			// todo
+			// store a RegisterClient log
+			println(registerClientMsg.request.String())
+			log := &LogEntry{
+				Index:  r.stableStore.LastLogIndex() + 1,
+				TermId: r.GetCurrentTerm(),
+				Type:   CommandType_CLIENT_REGISTRATION,
+				// ignore
+				Command: 0,
+				Data:    nil,
+				// todo?
+				CacheId: "",
+			}
+			r.stableStore.StoreLog(log)
+			fallback, _ := r.sendHeartbeats()
+			if fallback {
+				return r.doFollower()
+			}
+
+			// todo respond with id? ??????
+			r.processLogEntry(*log)
+		case clientRequestMsg := <-r.clientRequest:
+			// todo: append entry to local log, respond after entry applied to state machine
+			//r.GetCachedReply(clientRequestMsg.request)
+			println(clientRequestMsg.request.Data)
+		case shutdown := <-r.gracefulExit:
+			if shutdown {
+				return nil
+			}
+		}
+	}
 }
 
 // sendHeartbeats is used by the leader to send out heartbeats to each of
@@ -21,7 +64,20 @@ func (r *Node) doLeader() stateFunction {
 // up to that index. Once committed to that index, the replicated state
 // machine should be given the new log entries via processLogEntry.
 func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
-	// TODO: Students should implement this method
+	// TODO: Send asynchronously?
+	for _, node := range r.Peers {
+		reply, _ := node.AppendEntriesRPC(r, &AppendEntriesRequest{ // todo, handle error
+			Term:         r.GetCurrentTerm(),
+			Leader:       r.Self,
+			PrevLogIndex: r.lastApplied, // todo, confirm
+			PrevLogTerm:  0,             //todo
+			Entries:      nil,           //todo
+			LeaderCommit: r.commitIndex,
+		})
+		succ := reply.Success
+		return succ, true
+		//reply.Term
+	}
 	return true, true
 }
 
