@@ -321,3 +321,25 @@ func (r *Node) GracefulExit() {
 	r.server.GracefulStop()
 }
 
+//called upon updates of commitIndex to check if any new log entries may be committed
+func (r *Node) checkCommitment() {
+	for r.commitIndex > r.lastApplied {
+		r.lastApplied += 1
+		logEntry := r.GetLog(r.lastApplied)
+		msg, err := r.stateMachine.ApplyCommand(logEntry.Command, logEntry.Data)
+		if err != nil {
+			r.Error(string(msg))
+		}
+	}
+}
+
+// updateTerm updates term of node when appropriate
+func (r *Node) updateTerm(trialTerm uint64) (updated bool){
+	if trialTerm > r.GetCurrentTerm() {
+		r.setCurrentTerm(trialTerm)
+		r.setVotedFor("")
+		return true
+	}
+	return false
+}
+
