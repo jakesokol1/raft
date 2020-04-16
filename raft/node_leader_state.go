@@ -10,6 +10,15 @@ func (r *Node) doLeader() stateFunction {
 	// possible channel.
 
 	// initial work
+	for _, node := range r.Peers {
+		i := r.LastLogIndex() + 1
+		if i <= 0 {
+			i = 0
+		}
+		r.matchIndex[node.GetAddr()] = 0
+	}
+	// todo initialize nextIndex[] to lastLogIndex + 1, make sure it's not 0
+	// todo initialize matchIndex
 	r.sendHeartbeats()
 	// receive messages on all channels
 	for {
@@ -64,21 +73,29 @@ func (r *Node) doLeader() stateFunction {
 // up to that index. Once committed to that index, the replicated state
 // machine should be given the new log entries via processLogEntry.
 func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
-	// TODO: Send asynchronously?
+	// TODO: Send asynchronously
+	fallback = false
+	numSuccess := 0
 	for _, node := range r.Peers {
+		prevIndex := r.nextIndex[node.GetAddr()] - 1
 		reply, _ := node.AppendEntriesRPC(r, &AppendEntriesRequest{ // todo, handle error
 			Term:         r.GetCurrentTerm(),
 			Leader:       r.Self,
-			PrevLogIndex: r.lastApplied, // todo, confirm
-			PrevLogTerm:  0,             //todo
-			Entries:      nil,           //todo
+			PrevLogIndex: prevIndex,
+			PrevLogTerm:  r.stableStore.GetLog(prevIndex).GetTermId(), //todo, test
+			Entries:      r.stableStore.AllLogs()[prevIndex+1:],
 			LeaderCommit: r.commitIndex,
 		})
-		succ := reply.Success
-		return succ, true
-		//reply.Term
+		if reply.Term > r.GetCurrentTerm() {
+			fallback = true
+		}
+		if reply.GetSuccess() {
+			numSuccess++
+		} else {
+			r.nextIndex[node.GetAddr()]--
+		}
 	}
-	return true, true
+	return fallback, numSuccess > len(r.Peers)/2
 }
 
 // processLogEntry applies a single log entry to the finite state machine. It is
