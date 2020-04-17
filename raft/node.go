@@ -335,6 +335,9 @@ func (r *Node) checkCommitment() {
 
 // updateTerm updates term of node when appropriate
 func (r *Node) updateTerm(trialTerm uint64) (updated bool){
+	r.nodeMutex.Lock()
+	defer r.nodeMutex.Unlock()
+
 	if trialTerm > r.GetCurrentTerm() {
 		r.setCurrentTerm(trialTerm)
 		r.setVotedFor("")
@@ -342,4 +345,26 @@ func (r *Node) updateTerm(trialTerm uint64) (updated bool){
 	}
 	return false
 }
+
+func (r *Node) getCommitIndex() uint64 {
+	r.nodeMutex.Lock()
+	defer r.nodeMutex.Unlock()
+
+	return r.commitIndex
+}
+
+func (r *Node) setCommitIndex(commitIndex uint64) {
+	r.nodeMutex.Lock()
+	defer r.nodeMutex.Unlock()
+
+	r.commitIndex = commitIndex
+}
+
+func (r *Node) getPeers() []*RemoteNode {
+	r.nodeMutex.Lock()
+	defer r.nodeMutex.Unlock()
+
+	return r.Peers
+}
+
 
