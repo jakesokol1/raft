@@ -1,5 +1,10 @@
 package raft
 
+import (
+	"sync"
+	"time"
+)
+
 // doLeader implements the logic for a Raft node in the leader state.
 func (r *Node) doLeader() stateFunction {
 	r.Out("Transitioning to LeaderState")
@@ -17,13 +22,22 @@ func (r *Node) doLeader() stateFunction {
 		}
 		r.matchIndex[node.GetAddr()] = 0
 	}
-	// todo initialize nextIndex[] to lastLogIndex + 1, make sure it's not 0
-	// todo initialize matchIndex
+	inauguralEntry := LogEntry{
+		Index:  r.LastLogIndex(),
+		TermId: r.GetCurrentTerm(),
+		Type:   CommandType_NOOP,
+	}
+	r.stableStore.StoreLog(&inauguralEntry)
+	r.processLogEntry(inauguralEntry)
 	r.sendHeartbeats()
+	heartbeatTimeout := leaderTimeout()
 	// receive messages on all channels
 	for {
-		//random timeout representing timeout to switch to candidate state
+		// todo heartbeat timer
 		select {
+		case _ = <-heartbeatTimeout:
+			r.sendHeartbeats()
+			heartbeatTimeout = leaderTimeout()
 		case appendEntriesMsg := <-r.appendEntries:
 			// todo: how to handle another leader?
 			println("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
@@ -32,8 +46,8 @@ func (r *Node) doLeader() stateFunction {
 			println("leader got requestVote: " + string(requestVoteMsg.request.Term))
 		case registerClientMsg := <-r.registerClient:
 			// todo
+			replyChan := registerClientMsg.reply
 			// store a RegisterClient log
-			println(registerClientMsg.request.String())
 			log := &LogEntry{
 				Index:  r.stableStore.LastLogIndex() + 1,
 				TermId: r.GetCurrentTerm(),
@@ -45,13 +59,26 @@ func (r *Node) doLeader() stateFunction {
 				CacheId: "",
 			}
 			r.stableStore.StoreLog(log)
-			fallback, _ := r.sendHeartbeats()
+			fallback, sentToMajority := r.sendHeartbeats()
+			heartbeatTimeout = leaderTimeout()
 			if fallback {
 				return r.doFollower()
 			}
-
-			// todo respond with id? ??????
-			r.processLogEntry(*log)
+			if sentToMajority {
+				replyChan <- RegisterClientReply{
+					Status:     ClientStatus_OK,
+					ClientId:   r.stableStore.LastLogIndex(),
+					LeaderHint: r.Self,
+				}
+				// COMMIT ENTRY
+				r.processLogEntry(*log)
+			} else {
+				replyChan <- RegisterClientReply{
+					Status:     ClientStatus_REQ_FAILED,
+					ClientId:   nil,
+					LeaderHint: r.Self,
+				}
+			}
 		case clientRequestMsg := <-r.clientRequest:
 			// todo: append entry to local log, respond after entry applied to state machine
 			//r.GetCachedReply(clientRequestMsg.request)
@@ -73,28 +100,34 @@ func (r *Node) doLeader() stateFunction {
 // up to that index. Once committed to that index, the replicated state
 // machine should be given the new log entries via processLogEntry.
 func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
-	// TODO: Send asynchronously
+	// todo: handle hanging rpcs
+	var wg sync.WaitGroup
 	fallback = false
 	numSuccess := 0
 	for _, node := range r.Peers {
-		prevIndex := r.nextIndex[node.GetAddr()] - 1
-		reply, _ := node.AppendEntriesRPC(r, &AppendEntriesRequest{ // todo, handle error
-			Term:         r.GetCurrentTerm(),
-			Leader:       r.Self,
-			PrevLogIndex: prevIndex,
-			PrevLogTerm:  r.stableStore.GetLog(prevIndex).GetTermId(), //todo, test
-			Entries:      r.stableStore.AllLogs()[prevIndex+1:],
-			LeaderCommit: r.commitIndex,
-		})
-		if reply.Term > r.GetCurrentTerm() {
-			fallback = true
-		}
-		if reply.GetSuccess() {
-			numSuccess++
-		} else {
-			r.nextIndex[node.GetAddr()]--
-		}
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, node *RemoteNode) {
+			defer wg.Done()
+			prevIndex := r.nextIndex[node.GetAddr()] - 1
+			reply, _ := node.AppendEntriesRPC(r, &AppendEntriesRequest{ // todo, handle error
+				Term:         r.GetCurrentTerm(),
+				Leader:       r.Self,
+				PrevLogIndex: prevIndex,
+				PrevLogTerm:  r.stableStore.GetLog(prevIndex).GetTermId(), //todo, test
+				Entries:      r.stableStore.AllLogs()[prevIndex+1:],
+				LeaderCommit: r.commitIndex,
+			})
+			if reply.Term > r.GetCurrentTerm() {
+				fallback = true
+			}
+			if reply.GetSuccess() {
+				numSuccess++
+			} else {
+				r.nextIndex[node.GetAddr()]--
+			}
+		}(&wg, node)
 	}
+	wg.Wait()
 	return fallback, numSuccess > len(r.Peers)/2
 }
 
@@ -140,4 +173,8 @@ func (r *Node) processLogEntry(entry LogEntry) ClientReply {
 	r.requestsMutex.Unlock()
 
 	return reply
+}
+
+func leaderTimeout() <-chan time.Time {
+	return time.After(DefaultConfig().HeartbeatTimeout)
 }
