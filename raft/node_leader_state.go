@@ -33,19 +33,53 @@ func (r *Node) doLeader() stateFunction {
 	heartbeatTimeout := leaderTimeout()
 	// receive messages on all channels
 	for {
-		// todo heartbeat timer
 		select {
 		case _ = <-heartbeatTimeout:
-			r.sendHeartbeats()
+			fallback, commit := r.sendHeartbeats()
+			if fallback {
+				r.doFollower()
+			}
+			if commit {
+				prevCommit := r.commitIndex
+				r.commitIndex = r.stableStore.LastLogIndex()
+				for _, entry := range r.stableStore.AllLogs()[prevCommit+1:] {
+					r.processLogEntry(*entry)
+				}
+				r.lastApplied = r.commitIndex
+			}
 			heartbeatTimeout = leaderTimeout()
 		case appendEntriesMsg := <-r.appendEntries:
-			// todo: how to handle another leader?
+			if appendEntriesMsg.request.Leader == r.Self {
+				appendEntriesMsg.reply <- AppendEntriesReply{
+					Term:    r.GetCurrentTerm(),
+					Success: true,
+				}
+			} else {
+				if appendEntriesMsg.request.Term > r.GetCurrentTerm() {
+					r.Leader = appendEntriesMsg.request.Leader
+					r.handleAppendEntries(appendEntriesMsg)
+					r.doFollower()
+				} else {
+					appendEntriesMsg.reply <- AppendEntriesReply{
+						Term:    r.GetCurrentTerm(),
+						Success: false,
+					}
+				}
+			}
 			println("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
 		case requestVoteMsg := <-r.requestVote:
 			// todo @722. step down and vote if candidate is more up to date, otherwise reject vote
 			println("leader got requestVote: " + string(requestVoteMsg.request.Term))
+			if requestVoteMsg.request.Term > r.GetCurrentTerm() {
+				r.handleRequestVote(&requestVoteMsg)
+				r.doFollower()
+			} else {
+				requestVoteMsg.reply <- RequestVoteReply{
+					Term:        r.GetCurrentTerm(),
+					VoteGranted: false,
+				}
+			}
 		case registerClientMsg := <-r.registerClient:
-			// todo
 			replyChan := registerClientMsg.reply
 			// store a RegisterClient log
 			log := &LogEntry{
@@ -81,8 +115,23 @@ func (r *Node) doLeader() stateFunction {
 			}
 		case clientRequestMsg := <-r.clientRequest:
 			// todo: append entry to local log, respond after entry applied to state machine
-			//r.GetCachedReply(clientRequestMsg.request)
-			println(clientRequestMsg.request.Data)
+			cachedReply, success := r.GetCachedReply(*clientRequestMsg.request)
+			if success {
+				// todo: reply to old reply channel, if exists
+				clientRequestMsg.reply <- *cachedReply
+			} else {
+				log := &LogEntry{
+					Index:   r.stableStore.LastLogIndex() + 1,
+					TermId:  r.GetCurrentTerm(),
+					Type:    CommandType_STATE_MACHINE_COMMAND,
+					Command: clientRequestMsg.request.StateMachineCmd,
+					Data:    clientRequestMsg.request.Data,
+					// todo
+					CacheId: "",
+				}
+				r.stableStore.StoreLog(log)
+				r.processLogEntry(*log)
+			}
 		case shutdown := <-r.gracefulExit:
 			if shutdown {
 				return nil
