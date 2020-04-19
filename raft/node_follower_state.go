@@ -1,7 +1,5 @@
 package raft
 
-import "math"
-
 // doFollower implements the logic for a Raft node in the follower state.
 func (r *Node) doFollower() stateFunction {
 	r.Out("Transitioning to FollowerState")
@@ -42,13 +40,13 @@ func (r *Node) doFollower() stateFunction {
 			registerClientMsg.reply <- RegisterClientReply{
 				Status:     ClientStatus_NOT_LEADER,
 				ClientId:   0,
-				LeaderHint: r.Leader,
+				LeaderHint: r.getLeader(),
 			}
 		case clientRequestMsg := <-r.clientRequest:
 			clientRequestMsg.reply <- ClientReply{
 				Status:     ClientStatus_NOT_LEADER,
 				Response:   nil,
-				LeaderHint: r.Leader,
+				LeaderHint: r.getLeader(),
 			}
 		case shutdown := <-r.gracefulExit:
 			if shutdown {
@@ -116,6 +114,7 @@ func isUpToDate(candidateIndex uint64, candidateTerm uint64, log *LogEntry) (upT
 // - resetTimeout is true if the follower node should reset the election timeout
 // - fallback is true if the node should become a follower again
 func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback bool) {
+	//handle request from remote node
 	request := msg.request
 	//get currentTerm from local node
 	currentTerm := r.GetCurrentTerm()
@@ -125,22 +124,31 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 			Term:    r.GetCurrentTerm(),
 			Success: false,
 		}
-
 		return false, false
 	}
-	//TODO: determine if only case where resetTimeout and fallback are false is if request.Term < currentTerm
+	//request must be from a valid leader, set leader if it is new
+	r.setLeader(request.Leader)
+	//check if heartbeat message
+	if request.Entries == nil {
+		//TODO: ask michael if should return success as true or false
+		msg.reply <- AppendEntriesReply{
+			Term:                 r.GetCurrentTerm(),
+			Success:              false,
+		}
+		return true, true
+	}
+	//check if indexing is proper for log update
 	if entry := r.GetLog(request.PrevLogIndex); entry == nil || entry.TermId != request.PrevLogTerm {
 		msg.reply <- AppendEntriesReply {
 			Term:    r.GetCurrentTerm(),
 			Success: false,
 		}
-
 		return true, true
 	}
-	//update log entries in two steps
-	for _, entry := range request.Entries {
-		ind := entry.Index
-		term := entry.TermId
+	//truncate inconsistencies
+	for _, newEntry := range request.Entries {
+		ind := newEntry.Index
+		term := newEntry.TermId
 		if entry := r.GetLog(ind); entry != nil && entry.TermId != term {
 			r.TruncateLog(ind)
 		}
@@ -149,19 +157,12 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 	for _, entry := range request.Entries {
 		r.StoreLog(entry)
 	}
-	//update commitIndex
-	//TODO: Not sure if I am accessing correct entry here
-	if request.LeaderCommit > r.getCommitIndex() {
-		r.setCommitIndex(uint64(math.Min(float64(request.LeaderCommit),
-			float64(request.Entries[len(request.Entries) - 1].Index))))
-	}
-	r.checkCommitment()
-
+	//handle new commits and state machine work
+	go r.updateCommitment(request.LeaderCommit)
+	//successful update, respond to leader
 	msg.reply <- AppendEntriesReply{
 		Term:    r.GetCurrentTerm(),
 		Success: true,
 	}
-	//TODO: I am unsure about these return values
 	return true, true
-
 }

@@ -2,6 +2,7 @@ package raft
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"strconv"
@@ -45,6 +46,7 @@ type Node struct {
 	// Leader specific volatile state
 	commitIndex uint64
 	lastApplied uint64
+	commitMutex sync.Mutex
 	nextIndex   map[string]uint64
 	matchIndex  map[string]uint64
 	leaderMutex sync.Mutex
@@ -321,8 +323,15 @@ func (r *Node) GracefulExit() {
 	r.server.GracefulStop()
 }
 
+//TODO: change to updateCommitment
 //called upon updates of commitIndex to check if any new log entries may be committed
-func (r *Node) checkCommitment() {
+func (r *Node) updateCommitment(trialCommit uint64) {
+	r.commitMutex.Lock()
+	defer r.commitMutex.Unlock()
+
+	if trialCommit > r.commitIndex {
+		r.commitIndex = uint64(math.Min(float64(trialCommit), float64(r.LastLogIndex())))
+	}
 	for r.commitIndex > r.lastApplied {
 		r.lastApplied += 1
 		logEntry := r.GetLog(r.lastApplied)
@@ -346,25 +355,18 @@ func (r *Node) updateTerm(trialTerm uint64) (updated bool){
 	return false
 }
 
-func (r *Node) getCommitIndex() uint64 {
+func (r *Node) setLeader(leader *RemoteNode) {
 	r.nodeMutex.Lock()
 	defer r.nodeMutex.Unlock()
 
-	return r.commitIndex
+	r.Leader = leader
 }
 
-func (r *Node) setCommitIndex(commitIndex uint64) {
+func (r *Node) getLeader() *RemoteNode {
 	r.nodeMutex.Lock()
 	defer r.nodeMutex.Unlock()
 
-	r.commitIndex = commitIndex
-}
-
-func (r *Node) getPeers() []*RemoteNode {
-	r.nodeMutex.Lock()
-	defer r.nodeMutex.Unlock()
-
-	return r.Peers
+	return r.Leader
 }
 
 

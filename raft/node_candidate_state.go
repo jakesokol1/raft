@@ -1,5 +1,7 @@
 package raft
 
+import "math"
+
 // doCandidate implements the logic for a Raft node in the candidate state.
 func (r *Node) doCandidate() stateFunction {
 	r.Out("Transitioning to CandidateState")
@@ -18,13 +20,14 @@ func (r *Node) doCandidate() stateFunction {
 	timeout := randomTimeout(r.config.ElectionTimeout)
 	//send vote requests
 	electionResults, fallback := make(chan bool), make(chan bool)
-	r.requestVotes(electionResults, fallback, r.GetCurrentTerm())
+	go r.requestVotes(electionResults, fallback, r.GetCurrentTerm())
 	//EVALUATE CHANNELS
 	for {
 		//random timeout representing timeout to switch to candidate state
 		select {
 		case wonElection := <- electionResults:
 			if wonElection {
+				r.setLeader(r.Self)
 				return r.doLeader
 			}
 		case shouldFallback := <-fallback:
@@ -50,6 +53,7 @@ func (r *Node) doCandidate() stateFunction {
 				return r.doFollower
 			}
 		case registerClientMsg := <-r.registerClient:
+			//TODO: Amy says to check if leader is nil and read piazza
 			registerClientMsg.reply <- RegisterClientReply{
 				Status:     ClientStatus_NOT_LEADER,
 				ClientId:   0,
@@ -82,13 +86,17 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 		LastLogTerm:  r.GetLog(r.LastLogIndex()).TermId,
 	}
 	//vote counter for all OTHER nodes and implied vote from itself
-	var votesGranted = 1
+	var yesVotes, noVotes = 1, 0
 	//channel for replies
 	var replies = make(chan *RequestVoteReply)
+	//lock down peers while accessing
+	r.nodeMutex.Lock()
 	//get current slice of peers
-	var peers = r.getPeers()
 	//iterate through peers
-	for _, node := range peers {
+	for _, node := range r.Peers {
+		if node.Id == r.Self.Id {
+			continue
+		}
 		//parallel remote queries
 		go func(node *RemoteNode, replies chan *RequestVoteReply) {
 			reply, err := node.RequestVoteRPC(r, &request)
@@ -99,11 +107,12 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 			replies <- reply
 		}(node, replies)
 	}
+	r.nodeMutex.Unlock()
 	//iterate number of peer times grabbing reply from remote node replies and asses reply
-	for range peers {
-		//grab reply from replies channel
+	for  i := 0; i < r.config.ClusterSize - 1; i++ {
 		reply := <- replies
 		if reply == nil {
+			noVotes += 1
 			continue
 		}
 		//update term from reply
@@ -112,18 +121,26 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 			electionResults <- false
 			return
 		}
+		//update and check vote counts for completion
 		if reply.VoteGranted {
-			votesGranted += 1
+			yesVotes += 1
+		} else {
+			noVotes += 1
+		}
+		if yesVotes >= int(math.Ceil(float64(r.config.ClusterSize) / 2.)) {
+			fallback <- false
+			electionResults <- true
+			return
+		}
+		if noVotes > int(math.Floor(float64(r.config.ClusterSize) / 2.)) {
+			fallback <- true
+			electionResults <- false
+			return
 		}
 	}
-	//grant vote depending on count
-	if votesGranted >= (r.config.ClusterSize / 2) + 1 {
-		fallback <- false
-		electionResults <- true
-	} else {
-		fallback <- true
-		electionResults <- false
-	}
+	r.Error("Impossible vote condition, reverting to follower")
+	fallback <- true
+	electionResults <- false
 }
 
 // handleCompetingRequestVote handles an incoming vote request when the current
