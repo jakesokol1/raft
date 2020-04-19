@@ -1,7 +1,5 @@
 package raft
 
-import "math"
-
 // doFollower implements the logic for a Raft node in the follower state.
 func (r *Node) doFollower() stateFunction {
 	r.Out("Transitioning to FollowerState")
@@ -19,7 +17,7 @@ func (r *Node) doFollower() stateFunction {
 	for {
 		//random timeout representing timeout to switch to candidate state
 		select {
-		case _ = <-timeout:
+		case <-timeout:
 			return r.doCandidate
 		case appendEntriesMsg := <-r.appendEntries:
 			//update term
@@ -35,19 +33,20 @@ func (r *Node) doFollower() stateFunction {
 			//handle appendEntriesMsg
 			voteCasted := r.handleRequestVote(&requestVoteMsg)
 			if voteCasted {
-				timeout = randomTimeout(r.config.ElectionTimeout)
+				//TODO: Amy says no
+				//timeout = randomTimeout(r.config.ElectionTimeout)
 			}
 		case registerClientMsg := <-r.registerClient:
 			registerClientMsg.reply <- RegisterClientReply{
 				Status:     ClientStatus_NOT_LEADER,
 				ClientId:   0,
-				LeaderHint: r.Leader,
+				LeaderHint: r.getLeader(),
 			}
 		case clientRequestMsg := <-r.clientRequest:
 			clientRequestMsg.reply <- ClientReply{
 				Status:     ClientStatus_NOT_LEADER,
 				Response:   nil,
-				LeaderHint: r.Leader,
+				LeaderHint: r.getLeader(),
 			}
 		case shutdown := <-r.gracefulExit:
 			if shutdown {
@@ -115,44 +114,55 @@ func isUpToDate(candidateIndex uint64, candidateTerm uint64, log *LogEntry) (upT
 // - resetTimeout is true if the follower node should reset the election timeout
 // - fallback is true if the node should become a follower again
 func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback bool) {
-	// TODO: Students should implement this method
+	//handle request from remote node
 	request := msg.request
 	//get currentTerm from local node
 	currentTerm := r.GetCurrentTerm()
 	//check if bad request
-	if request.Term < currentTerm || r.GetLog(request.PrevLogIndex).TermId != request.PrevLogTerm {
+	if request.Term < currentTerm {
+		msg.reply <- AppendEntriesReply{
+			Term:    r.GetCurrentTerm(),
+			Success: false,
+		}
+		return false, false
+	}
+	//request must be from a valid leader, set leader if it is new
+	r.setLeader(request.Leader)
+	//check if heartbeat message
+	if request.Entries == nil {
+		//TODO: ask michael if should return success as true or false
 		msg.reply <- AppendEntriesReply{
 			Term:                 r.GetCurrentTerm(),
 			Success:              false,
 		}
-		//TODO: I am unsure about these return values
-		return false, false
+		return true, true
 	}
-	//update log entries in two steps
-	for _, entry := range request.Entries {
-		ind := entry.Index
-		term := entry.TermId
+	//check if indexing is proper for log update
+	if entry := r.GetLog(request.PrevLogIndex); entry == nil || entry.TermId != request.PrevLogTerm {
+		msg.reply <- AppendEntriesReply {
+			Term:    r.GetCurrentTerm(),
+			Success: false,
+		}
+		return true, true
+	}
+	//truncate inconsistencies
+	for _, newEntry := range request.Entries {
+		ind := newEntry.Index
+		term := newEntry.TermId
 		if entry := r.GetLog(ind); entry != nil && entry.TermId != term {
 			r.TruncateLog(ind)
 		}
 	}
-	//TODO: Idempotent?
+	//store all logs in entries
 	for _, entry := range request.Entries {
 		r.StoreLog(entry)
 	}
-	//update commitIndex
-	//TODO: Not sure if I am accessing correct entry here
-	if request.LeaderCommit > r.commitIndex {
-		r.commitIndex = uint64(math.Min(float64(request.LeaderCommit),
-			float64(request.Entries[len(request.Entries) - 1].Index)))
-	}
-	r.checkCommitment()
-
+	//handle new commits and state machine work
+	go r.updateCommitment(request.LeaderCommit)
+	//successful update, respond to leader
 	msg.reply <- AppendEntriesReply{
-		Term:                 r.GetCurrentTerm(),
-		Success:              true,
+		Term:    r.GetCurrentTerm(),
+		Success: true,
 	}
-	//TODO: I am unsure about these return values
 	return true, true
-
 }
