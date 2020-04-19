@@ -109,7 +109,7 @@ func (r *Node) doLeader() stateFunction {
 			} else {
 				replyChan <- RegisterClientReply{
 					Status:     ClientStatus_REQ_FAILED,
-					ClientId:   nil,
+					ClientId:   0,
 					LeaderHint: r.Self,
 				}
 			}
