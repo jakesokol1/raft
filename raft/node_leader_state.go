@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"go.uber.org/atomic"
 	"sync"
 	"time"
 )
@@ -154,14 +155,15 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 	// todo: handle hanging rpcs
 	var wg sync.WaitGroup
 	fallback = false
-	numSuccess := 0
+	numSuccess := atomic.NewInt32(0)
 	r.Out("Sending heartbeats...")
 	for _, node := range r.Peers {
 		if node.Id == r.Self.Id {
+			numSuccess.Add(1)
 			continue
 		}
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, node *RemoteNode) {
+		go func(wg *sync.WaitGroup, node *RemoteNode, numSuccess *atomic.Int32) {
 			defer wg.Done()
 			prevIndex := r.nextIndex[node.GetAddr()] - 1
 			reply, _ := node.AppendEntriesRPC(r, &AppendEntriesRequest{ // todo, handle error
@@ -176,17 +178,19 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 				fallback = true
 			}
 			if reply.GetSuccess() {
-				numSuccess++
+				println("append success")
+				numSuccess.Add(1)
 			} else {
 				if r.nextIndex[node.GetAddr()] != 0 {
 					r.nextIndex[node.GetAddr()]--
 				}
 			}
-		}(&wg, node)
+		}(&wg, node, numSuccess)
 	}
 	wg.Wait()
+	//println(numSuccess.Load())
 	r.Out("Finished")
-	return fallback, numSuccess > len(r.Peers)/2
+	return fallback, int(numSuccess.Load()) > len(r.Peers)/2
 }
 
 // processLogEntry applies a single log entry to the finite state machine. It is
