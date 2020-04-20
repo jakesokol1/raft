@@ -25,7 +25,7 @@ func (r *Node) doCandidate() stateFunction {
 	for {
 		//random timeout representing timeout to switch to candidate state
 		select {
-		case wonElection := <- electionResults:
+		case wonElection := <-electionResults:
 			if wonElection {
 				r.setLeader(r.Self)
 				return r.doLeader
@@ -104,15 +104,15 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 			reply, err := node.RequestVoteRPC(r, &request)
 			if err != nil {
 				//possible network error, non-breaking
-				r.Error(err.Error())
+				//r.Error(err.Error())
 			}
 			replies <- reply
 		}(node, replies)
 	}
 	r.nodeMutex.Unlock()
 	//iterate number of peer times grabbing reply from remote node replies and asses reply
-	for  i := 0; i < r.config.ClusterSize - 1; i++ {
-		reply := <- replies
+	for i := 0; i < r.config.ClusterSize-1; i++ {
+		reply := <-replies
 		if reply == nil {
 			noVotes += 1
 			continue
@@ -129,13 +129,13 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 		} else {
 			noVotes += 1
 		}
-		if yesVotes >= int(math.Ceil(float64(r.config.ClusterSize) / 2.)) {
+		if yesVotes >= int(math.Ceil(float64(r.config.ClusterSize)/2.)) {
 			r.Out("Number yes votes: %v", yesVotes)
 			fallback <- false
 			electionResults <- true
 			return
 		}
-		if noVotes > int(math.Floor(float64(r.config.ClusterSize) / 2.)) {
+		if noVotes > int(math.Floor(float64(r.config.ClusterSize)/2.)) {
 			fallback <- true
 			electionResults <- false
 			return

@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -47,7 +48,7 @@ func TestInit(t *testing.T) {
 // Tests that if a leader is partitioned from its followers, a
 // new leader is elected.
 func TestNewElection(t *testing.T) {
-	suppressLoggers()
+	//suppressLoggers()
 	config := DefaultConfig()
 	config.ClusterSize = 5
 
@@ -56,21 +57,23 @@ func TestNewElection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	fmt.Println("Sleep...........")
 	// wait for a leader to be elected
 	time.Sleep(time.Second * WaitPeriod)
 	oldLeader, err := findLeader(cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	fmt.Println("Pause world.........")
 	// partition leader, triggering election
 	oldTerm := oldLeader.GetCurrentTerm()
 	oldLeader.NetworkPolicy.PauseWorld(true)
 
+	fmt.Println("Sleep...........")
 	// wait for new leader to be elected
 	time.Sleep(time.Second * WaitPeriod)
 
+	fmt.Println("Sleep...........")
 	// unpause old leader and wait for it to become a follower
 	oldLeader.NetworkPolicy.PauseWorld(false)
 	time.Sleep(time.Second * WaitPeriod)

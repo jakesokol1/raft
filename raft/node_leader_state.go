@@ -30,28 +30,31 @@ func (r *Node) doLeader() stateFunction {
 	}
 	r.stableStore.StoreLog(&inauguralEntry)
 	r.processLogEntry(inauguralEntry)
-	r.sendHeartbeats()
+
+	//create a channel for communication with concurrent heartbeats
+	fallback := make(chan bool)
+	go r.sendHeartbeatsHandler(fallback)
+	//r.sendHeartbeats()
 	heartbeatTimeout := leaderTimeout()
 	// receive messages on all channels
 	for {
 		select {
-		case _ = <-heartbeatTimeout:
-			fallback, commit := r.sendHeartbeats()
-			if fallback {
+		case shouldFallback := <-fallback:
+			if shouldFallback {
+				r.Out("Falling back to follower")
 				r.doFollower()
 			}
-			if commit {
-				r.Out("Commit")
-				prevCommit := r.commitIndex
-				r.commitIndex = r.stableStore.LastLogIndex()
-				for _, entry := range r.stableStore.AllLogs()[prevCommit+1:] {
-					r.processLogEntry(*entry)
-				}
-				r.lastApplied = r.commitIndex
-				r.Out("Done with commit")
-			}
+		case _ = <-heartbeatTimeout:
+
+			go r.sendHeartbeatsHandler(fallback)
+			//fallback, commit := r.sendHeartbeats()
+			//if fallback {
+			//	r.doFollower()
+			//}
+
 			heartbeatTimeout = leaderTimeout()
 		case appendEntriesMsg := <-r.appendEntries:
+			r.Out("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
 			if appendEntriesMsg.request.Leader == r.Self {
 				appendEntriesMsg.reply <- AppendEntriesReply{
 					Term:    r.GetCurrentTerm(),
@@ -69,7 +72,6 @@ func (r *Node) doLeader() stateFunction {
 					}
 				}
 			}
-			r.Out("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
 		case requestVoteMsg := <-r.requestVote:
 			// todo @722. step down and vote if candidate is more up to date, otherwise reject vote
 			r.Out("leader got requestVote: " + string(requestVoteMsg.request.Term))
@@ -143,6 +145,24 @@ func (r *Node) doLeader() stateFunction {
 	}
 }
 
+func (r *Node) sendHeartbeatsHandler(fallChan chan bool) {
+
+	fallback, sentToMajority := r.sendHeartbeats()
+	if sentToMajority {
+
+		//using helper in node
+		r.updateCommitment(r.LastLogIndex())
+
+		//prevCommit := r.commitIndex
+		//r.commitIndex = r.stableStore.LastLogIndex()
+		//for _, entry := range r.stableStore.AllLogs()[prevCommit+1:] {
+		//	r.processLogEntry(*entry)
+		//}
+		//r.lastApplied = r.commitIndex
+	}
+	fallChan <- fallback
+}
+
 // sendHeartbeats is used by the leader to send out heartbeats to each of
 // the other nodes. It returns true if the leader should fall back to the
 // follower state. (This happens if we discover that we are in an old term.)
@@ -154,6 +174,7 @@ func (r *Node) doLeader() stateFunction {
 func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 	// todo: handle hanging rpcs
 	var wg sync.WaitGroup
+	var mtx sync.Mutex
 	fallback = false
 	numSuccess := atomic.NewInt32(0)
 	r.Out("Sending heartbeats...")
@@ -166,7 +187,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 		go func(wg *sync.WaitGroup, node *RemoteNode, numSuccess *atomic.Int32) {
 			defer wg.Done()
 			prevIndex := r.nextIndex[node.GetAddr()] - 1
-			reply, _ := node.AppendEntriesRPC(r, &AppendEntriesRequest{ // todo, handle error
+			reply, err := node.AppendEntriesRPC(r, &AppendEntriesRequest{ // todo, handle error
 				Term:         r.GetCurrentTerm(),
 				Leader:       r.Self,
 				PrevLogIndex: prevIndex,
@@ -174,6 +195,13 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 				Entries:      r.stableStore.AllLogs()[prevIndex+1:],
 				LeaderCommit: r.commitIndex,
 			})
+			if reply == nil {
+				if err == nil {
+					r.Error("Weird case where reply is nil but error isn't")
+				}
+				return
+			}
+			mtx.Lock()
 			if reply.Term > r.GetCurrentTerm() {
 				fallback = true
 			}
@@ -185,6 +213,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 					r.nextIndex[node.GetAddr()]--
 				}
 			}
+			mtx.Unlock()
 		}(&wg, node, numSuccess)
 	}
 	wg.Wait()

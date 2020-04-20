@@ -21,11 +21,11 @@ func (r *Node) doFollower() stateFunction {
 			return r.doCandidate
 		case appendEntriesMsg := <-r.appendEntries:
 			//update term
-			r.Out("Receiving Message")
+			//r.Out("Receiving Message")
 			_ = r.updateTerm(appendEntriesMsg.request.Term)
 			//handle appendEntriesMsg
 			resetTimeout, _ := r.handleAppendEntries(appendEntriesMsg)
-			r.Out("Reset timeout: %v", resetTimeout)
+			//r.Out("Reset timeout: %v", resetTimeout)
 			if resetTimeout {
 				timeout = randomTimeout(r.config.ElectionTimeout)
 			}
@@ -86,14 +86,14 @@ func (r *Node) handleRequestVote(requestVoteMsg *RequestVoteMsg) (voteCasted boo
 		r.setVotedFor(request.Candidate.Id)
 		//requestVote reply
 		requestVoteMsg.reply <- RequestVoteReply{
-			Term:                 currentTerm,
-			VoteGranted:          true,
+			Term:        currentTerm,
+			VoteGranted: true,
 		}
 		return true
 	} else {
 		requestVoteMsg.reply <- RequestVoteReply{
-			Term:                 currentTerm,
-			VoteGranted:          false,
+			Term:        currentTerm,
+			VoteGranted: false,
 		}
 		return false
 	}
@@ -135,14 +135,14 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 	if request.Entries == nil {
 		//TODO: ask michael if should return success as true or false
 		msg.reply <- AppendEntriesReply{
-			Term:                 r.GetCurrentTerm(),
-			Success:              false,
+			Term:    r.GetCurrentTerm(),
+			Success: false,
 		}
 		return true, true
 	}
 	//check if indexing is proper for log update
 	if entry := r.GetLog(request.PrevLogIndex); entry == nil || entry.TermId != request.PrevLogTerm {
-		msg.reply <- AppendEntriesReply {
+		msg.reply <- AppendEntriesReply{
 			Term:    r.GetCurrentTerm(),
 			Success: false,
 		}
