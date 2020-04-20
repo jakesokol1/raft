@@ -105,7 +105,7 @@ func (r *Node) doLeader() stateFunction {
 					LeaderHint: r.Self,
 				}
 				// COMMIT ENTRY
-				r.processLogEntry(*log)
+				//r.processLogEntry(*log)
 			} else {
 				replyChan <- RegisterClientReply{
 					Status:     ClientStatus_REQ_FAILED,
@@ -142,12 +142,31 @@ func (r *Node) doLeader() stateFunction {
 
 func (r *Node) sendHeartbeatsHandler(fallChan chan bool) {
 
-	fallback, sentToMajority := r.sendHeartbeats()
-	if sentToMajority {
-		//using helper in node
-		r.updateCommitment(r.LastLogIndex())
-	}
+	fallback, _ := r.sendHeartbeats()
+	r.updateLeaderCommit()
 	fallChan <- fallback
+}
+
+func (r *Node) updateLeaderCommit() {
+	prevCommit := r.commitIndex
+	for _, entry := range r.stableStore.AllLogs()[prevCommit+1:] {
+		// todo fix to use marjorityValid
+		if majorityValid(entry.Index, r.matchIndex) {
+			r.commitIndex = entry.Index
+			r.processLogEntry(*entry)
+			r.lastApplied = r.commitIndex
+		}
+	}
+}
+
+func majorityValid(n uint64, matchIndex map[string]uint64) bool {
+	numInRange := 0
+	for _, i := range matchIndex {
+		if i >= n {
+			numInRange++
+		}
+	}
+	return numInRange > len(matchIndex)/2
 }
 
 // sendHeartbeats is used by the leader to send out heartbeats to each of
@@ -168,6 +187,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 	for _, node := range r.Peers {
 		if node.Id == r.Self.Id {
 			numSuccess.Add(1)
+			r.matchIndex[node.GetAddr()] = r.stableStore.LastLogIndex()
 			continue
 		}
 		wg.Add(1)
@@ -193,8 +213,12 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 				fallback = true
 			}
 			if reply.GetSuccess() {
+				println("succ")
+				r.nextIndex[node.GetAddr()] = r.LastLogIndex() + 1
+				r.matchIndex[node.GetAddr()] = r.LastLogIndex()
 				numSuccess.Add(1)
 			} else {
+				println("f")
 				if r.nextIndex[node.GetAddr()] != 0 {
 					r.nextIndex[node.GetAddr()]--
 				}
