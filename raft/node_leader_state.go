@@ -178,7 +178,9 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 			if reply.GetSuccess() {
 				numSuccess++
 			} else {
-				r.nextIndex[node.GetAddr()]--
+				if r.nextIndex[node.GetAddr()] != 0 {
+					r.nextIndex[node.GetAddr()]--
+				}
 			}
 		}(&wg, node)
 	}
