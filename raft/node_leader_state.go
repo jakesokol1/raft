@@ -40,12 +40,14 @@ func (r *Node) doLeader() stateFunction {
 				r.doFollower()
 			}
 			if commit {
+				r.Out("Commit")
 				prevCommit := r.commitIndex
 				r.commitIndex = r.stableStore.LastLogIndex()
 				for _, entry := range r.stableStore.AllLogs()[prevCommit+1:] {
 					r.processLogEntry(*entry)
 				}
 				r.lastApplied = r.commitIndex
+				r.Out("Done with commit")
 			}
 			heartbeatTimeout = leaderTimeout()
 		case appendEntriesMsg := <-r.appendEntries:
@@ -66,10 +68,10 @@ func (r *Node) doLeader() stateFunction {
 					}
 				}
 			}
-			println("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
+			r.Out("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
 		case requestVoteMsg := <-r.requestVote:
 			// todo @722. step down and vote if candidate is more up to date, otherwise reject vote
-			println("leader got requestVote: " + string(requestVoteMsg.request.Term))
+			r.Out("leader got requestVote: " + string(requestVoteMsg.request.Term))
 			if requestVoteMsg.request.Term > r.GetCurrentTerm() {
 				r.handleRequestVote(&requestVoteMsg)
 				r.doFollower()
@@ -153,7 +155,11 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 	var wg sync.WaitGroup
 	fallback = false
 	numSuccess := 0
+	r.Out("Sending heartbeats...")
 	for _, node := range r.Peers {
+		if node.Id == r.Self.Id {
+			continue
+		}
 		wg.Add(1)
 		go func(wg *sync.WaitGroup, node *RemoteNode) {
 			defer wg.Done()
@@ -177,6 +183,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 		}(&wg, node)
 	}
 	wg.Wait()
+	r.Out("Finished")
 	return fallback, numSuccess > len(r.Peers)/2
 }
 

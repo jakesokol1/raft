@@ -40,6 +40,7 @@ func (r *Node) doCandidate() stateFunction {
 			//update term
 			updated := r.updateTerm(appendEntriesMsg.request.Term)
 			//handle appendEntriesMsg
+			r.Out("Received append entries")
 			if _, fallback := r.handleAppendEntries(appendEntriesMsg); fallback || updated {
 				return r.doFollower
 			}
@@ -47,6 +48,7 @@ func (r *Node) doCandidate() stateFunction {
 			//update term
 			updated := r.updateTerm(requestVoteMsg.request.Term)
 			//handle appendEntriesMsg
+			r.Out("Received vote request")
 			_ = r.handleRequestVote(&requestVoteMsg)
 			//only fallback case is if term is updated
 			if updated {
@@ -128,6 +130,7 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 			noVotes += 1
 		}
 		if yesVotes >= int(math.Ceil(float64(r.config.ClusterSize) / 2.)) {
+			r.Out("Number yes votes: %s", yesVotes)
 			fallback <- false
 			electionResults <- true
 			return

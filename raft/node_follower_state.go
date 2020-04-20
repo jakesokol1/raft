@@ -21,9 +21,11 @@ func (r *Node) doFollower() stateFunction {
 			return r.doCandidate
 		case appendEntriesMsg := <-r.appendEntries:
 			//update term
+			r.Out("Receiving Message")
 			_ = r.updateTerm(appendEntriesMsg.request.Term)
 			//handle appendEntriesMsg
 			resetTimeout, _ := r.handleAppendEntries(appendEntriesMsg)
+			r.Out("Reset timeout: %s", resetTimeout)
 			if resetTimeout {
 				timeout = randomTimeout(r.config.ElectionTimeout)
 			}
@@ -32,9 +34,10 @@ func (r *Node) doFollower() stateFunction {
 			_ = r.updateTerm(requestVoteMsg.request.Term)
 			//handle appendEntriesMsg
 			voteCasted := r.handleRequestVote(&requestVoteMsg)
+			r.Out("Received vote request from %s, granted: %s", requestVoteMsg.request.Candidate.Id, voteCasted)
 			if voteCasted {
-				//TODO: Amy says no
-				//timeout = randomTimeout(r.config.ElectionTimeout)
+				//TODO: Amy says no, I say why not
+				timeout = randomTimeout(r.config.ElectionTimeout)
 			}
 		case registerClientMsg := <-r.registerClient:
 			registerClientMsg.reply <- RegisterClientReply{
