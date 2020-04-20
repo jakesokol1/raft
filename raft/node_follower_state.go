@@ -133,10 +133,9 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 	r.setLeader(request.Leader)
 	//check if heartbeat message
 	if request.Entries == nil {
-		//TODO: ask michael if should return success as true or false
 		msg.reply <- AppendEntriesReply{
 			Term:    r.GetCurrentTerm(),
-			Success: false,
+			Success: true,
 		}
 		return true, true
 	}
@@ -163,6 +162,7 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 	//handle new commits and state machine work
 	go r.updateCommitment(request.LeaderCommit)
 	//successful update, respond to leader
+	println("test")
 	msg.reply <- AppendEntriesReply{
 		Term:    r.GetCurrentTerm(),
 		Success: true,

@@ -26,7 +26,7 @@ func TestClientInteraction_Leader(t *testing.T) {
 	reply, _ := leader.RegisterClientCaller(context.Background(), &RegisterClientRequest{})
 
 	if reply.Status != ClientStatus_OK {
-		t.Fatal("Counld not register client")
+		t.Fatal("Could not register client")
 	}
 
 	clientid := reply.ClientId

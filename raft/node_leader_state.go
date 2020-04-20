@@ -21,6 +21,7 @@ func (r *Node) doLeader() stateFunction {
 		if i <= 0 {
 			i = 0
 		}
+		r.nextIndex[node.GetAddr()] = i
 		r.matchIndex[node.GetAddr()] = 0
 	}
 	inauguralEntry := LogEntry{
@@ -32,26 +33,20 @@ func (r *Node) doLeader() stateFunction {
 	r.processLogEntry(inauguralEntry)
 
 	//create a channel for communication with concurrent heartbeats
-	fallback := make(chan bool)
-	go r.sendHeartbeatsHandler(fallback)
+	fallbackChan := make(chan bool)
+	go r.sendHeartbeatsHandler(fallbackChan)
 	//r.sendHeartbeats()
 	heartbeatTimeout := leaderTimeout()
 	// receive messages on all channels
 	for {
 		select {
-		case shouldFallback := <-fallback:
+		case shouldFallback := <-fallbackChan:
 			if shouldFallback {
 				r.Out("Falling back to follower")
 				r.doFollower()
 			}
 		case _ = <-heartbeatTimeout:
-
-			go r.sendHeartbeatsHandler(fallback)
-			//fallback, commit := r.sendHeartbeats()
-			//if fallback {
-			//	r.doFollower()
-			//}
-
+			go r.sendHeartbeatsHandler(fallbackChan)
 			heartbeatTimeout = leaderTimeout()
 		case appendEntriesMsg := <-r.appendEntries:
 			r.Out("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
@@ -73,7 +68,7 @@ func (r *Node) doLeader() stateFunction {
 				}
 			}
 		case requestVoteMsg := <-r.requestVote:
-			// todo @722. step down and vote if candidate is more up to date, otherwise reject vote
+			// step down and vote if candidate is more up to date, otherwise reject vote
 			r.Out("leader got requestVote: " + string(requestVoteMsg.request.Term))
 			if requestVoteMsg.request.Term > r.GetCurrentTerm() {
 				r.handleRequestVote(&requestVoteMsg)
@@ -149,16 +144,8 @@ func (r *Node) sendHeartbeatsHandler(fallChan chan bool) {
 
 	fallback, sentToMajority := r.sendHeartbeats()
 	if sentToMajority {
-
 		//using helper in node
 		r.updateCommitment(r.LastLogIndex())
-
-		//prevCommit := r.commitIndex
-		//r.commitIndex = r.stableStore.LastLogIndex()
-		//for _, entry := range r.stableStore.AllLogs()[prevCommit+1:] {
-		//	r.processLogEntry(*entry)
-		//}
-		//r.lastApplied = r.commitIndex
 	}
 	fallChan <- fallback
 }
@@ -206,7 +193,6 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 				fallback = true
 			}
 			if reply.GetSuccess() {
-				println("append success")
 				numSuccess.Add(1)
 			} else {
 				if r.nextIndex[node.GetAddr()] != 0 {
@@ -217,7 +203,6 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 		}(&wg, node, numSuccess)
 	}
 	wg.Wait()
-	//println(numSuccess.Load())
 	r.Out("Finished")
 	return fallback, int(numSuccess.Load()) > len(r.Peers)/2
 }

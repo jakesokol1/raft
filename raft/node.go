@@ -323,7 +323,6 @@ func (r *Node) GracefulExit() {
 	r.server.GracefulStop()
 }
 
-//TODO: change to updateCommitment
 //called upon updates of commitIndex to check if any new log entries may be committed
 func (r *Node) updateCommitment(trialCommit uint64) {
 	r.commitMutex.Lock()
@@ -343,7 +342,7 @@ func (r *Node) updateCommitment(trialCommit uint64) {
 }
 
 // updateTerm updates term of node when appropriate
-func (r *Node) updateTerm(trialTerm uint64) (updated bool){
+func (r *Node) updateTerm(trialTerm uint64) (updated bool) {
 	r.nodeMutex.Lock()
 	defer r.nodeMutex.Unlock()
 
@@ -368,5 +367,3 @@ func (r *Node) getLeader() *RemoteNode {
 
 	return r.Leader
 }
-
-
