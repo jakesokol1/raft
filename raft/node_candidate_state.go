@@ -130,7 +130,7 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 			noVotes += 1
 		}
 		if yesVotes >= int(math.Ceil(float64(r.config.ClusterSize) / 2.)) {
-			r.Out("Number yes votes: %s", yesVotes)
+			r.Out("Number yes votes: %v", yesVotes)
 			fallback <- false
 			electionResults <- true
 			return
