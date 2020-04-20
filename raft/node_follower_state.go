@@ -21,11 +21,11 @@ func (r *Node) doFollower() stateFunction {
 			return r.doCandidate
 		case appendEntriesMsg := <-r.appendEntries:
 			//update term
-			r.Out("Receiving Message")
+			//r.Out("Receiving Message")
 			_ = r.updateTerm(appendEntriesMsg.request.Term)
 			//handle appendEntriesMsg
 			resetTimeout, _ := r.handleAppendEntries(appendEntriesMsg)
-			r.Out("Reset timeout: %v", resetTimeout)
+			//r.Out("Reset timeout: %v", resetTimeout)
 			if resetTimeout {
 				timeout = randomTimeout(r.config.ElectionTimeout)
 			}

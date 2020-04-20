@@ -104,7 +104,7 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 			reply, err := node.RequestVoteRPC(r, &request)
 			if err != nil {
 				//possible network error, non-breaking
-				r.Error(err.Error())
+				//r.Error(err.Error())
 			}
 			replies <- reply
 		}(node, replies)
