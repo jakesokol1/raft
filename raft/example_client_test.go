@@ -28,7 +28,7 @@ func TestClientInteraction_Leader(t *testing.T) {
 	if reply.Status != ClientStatus_OK {
 		t.Fatal("Could not register client")
 	}
-
+	println("register client successful")
 	clientid := reply.ClientId
 
 	// Hash initialization request
@@ -42,7 +42,7 @@ func TestClientInteraction_Leader(t *testing.T) {
 	if clientResult.Status != ClientStatus_OK {
 		t.Fatal("Leader failed to commit a client request")
 	}
-
+	println("commit client request successful")
 	// Make sure further request is correct processed
 	ClientReq := ClientRequest{
 		ClientId:        clientid,

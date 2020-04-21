@@ -25,12 +25,13 @@ func (r *Node) doLeader() stateFunction {
 		r.matchIndex[node.GetAddr()] = 0
 	}
 	inauguralEntry := LogEntry{
-		Index:  r.LastLogIndex(),
+		Index:  r.LastLogIndex() + 1,
 		TermId: r.GetCurrentTerm(),
 		Type:   CommandType_NOOP,
 	}
+	println(r.LastLogIndex())
 	r.stableStore.StoreLog(&inauguralEntry)
-
+	println(r.LastLogIndex())
 	//create a channel for communication with concurrent heartbeats
 	fallbackChan := make(chan bool)
 	go r.sendHeartbeatsHandler(fallbackChan)
@@ -189,14 +190,15 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 		go func(wg *sync.WaitGroup, node *RemoteNode, numSuccess *atomic.Int32) {
 			defer wg.Done()
 			prevIndex := r.nextIndex[node.GetAddr()] - 1
-			reply, err := node.AppendEntriesRPC(r, &AppendEntriesRequest{ // todo, handle error
+			request := &AppendEntriesRequest{ // todo, handle error
 				Term:         r.GetCurrentTerm(),
 				Leader:       r.Self,
 				PrevLogIndex: prevIndex,
 				PrevLogTerm:  r.stableStore.GetLog(prevIndex).GetTermId(), //todo, test
 				Entries:      r.stableStore.AllLogs()[prevIndex+1:],
 				LeaderCommit: r.commitIndex,
-			})
+			}
+			reply, err := node.AppendEntriesRPC(r, request)
 			if reply == nil {
 				if err == nil {
 					r.Error("Weird case where reply is nil but error isn't")
@@ -209,7 +211,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 				fallback = true
 			}
 			if reply.GetSuccess() {
-				println("succ")
+				//println("succ")
 				r.nextIndex[node.GetAddr()] = r.LastLogIndex() + 1
 				r.matchIndex[node.GetAddr()] = r.LastLogIndex()
 				numSuccess.Add(1)
