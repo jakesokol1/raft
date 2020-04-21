@@ -10,7 +10,7 @@ import (
 func (r *Node) doLeader() stateFunction {
 	r.Out("Transitioning to LeaderState")
 	r.State = LeaderState
-
+	r.setLeader(r.Self)
 	// Hint: perform any initial work, and then consider what a node in the
 	// leader state should do when it receives an incoming message on every
 	// possible channel.
@@ -30,7 +30,6 @@ func (r *Node) doLeader() stateFunction {
 		Type:   CommandType_NOOP,
 	}
 	r.stableStore.StoreLog(&inauguralEntry)
-	r.processLogEntry(inauguralEntry)
 
 	//create a channel for communication with concurrent heartbeats
 	fallbackChan := make(chan bool)
@@ -71,8 +70,9 @@ func (r *Node) doLeader() stateFunction {
 			// step down and vote if candidate is more up to date, otherwise reject vote
 			r.Out("leader got requestVote: " + string(requestVoteMsg.request.Term))
 			if requestVoteMsg.request.Term > r.GetCurrentTerm() {
+				r.setCurrentTerm(requestVoteMsg.request.Term)
 				r.handleRequestVote(&requestVoteMsg)
-				r.doFollower()
+				return r.doFollower
 			} else {
 				requestVoteMsg.reply <- RequestVoteReply{
 					Term:        r.GetCurrentTerm(),
@@ -86,17 +86,12 @@ func (r *Node) doLeader() stateFunction {
 				Index:  r.stableStore.LastLogIndex() + 1,
 				TermId: r.GetCurrentTerm(),
 				Type:   CommandType_CLIENT_REGISTRATION,
-				// ignore
-				Command: 0,
-				Data:    nil,
-				// todo?
-				CacheId: "",
 			}
 			r.stableStore.StoreLog(log)
 			fallback, sentToMajority := r.sendHeartbeats()
 			heartbeatTimeout = leaderTimeout()
 			if fallback {
-				return r.doFollower()
+				return r.doFollower
 			}
 			if sentToMajority {
 				replyChan <- RegisterClientReply{
