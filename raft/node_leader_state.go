@@ -42,7 +42,7 @@ func (r *Node) doLeader() stateFunction {
 		case shouldFallback := <-fallbackChan:
 			if shouldFallback {
 				r.Out("Falling back to follower")
-				r.doFollower()
+				return r.doFollower
 			}
 		case _ = <-heartbeatTimeout:
 			go r.sendHeartbeatsHandler(fallbackChan)
@@ -58,7 +58,7 @@ func (r *Node) doLeader() stateFunction {
 				if appendEntriesMsg.request.Term > r.GetCurrentTerm() {
 					r.Leader = appendEntriesMsg.request.Leader
 					r.handleAppendEntries(appendEntriesMsg)
-					r.doFollower()
+					return r.doFollower
 				} else {
 					appendEntriesMsg.reply <- AppendEntriesReply{
 						Term:    r.GetCurrentTerm(),
@@ -205,6 +205,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 			}
 			mtx.Lock()
 			if reply.Term > r.GetCurrentTerm() {
+				r.setCurrentTerm(reply.Term)
 				fallback = true
 			}
 			if reply.GetSuccess() {
