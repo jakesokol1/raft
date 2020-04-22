@@ -13,11 +13,11 @@ func TestClientInteraction_Leader(t *testing.T) {
 	suppressLoggers()
 	config := DefaultConfig()
 	cluster, _ := CreateLocalCluster(config)
-	defer cleanupCluster(cluster)
+	defer CleanupCluster(cluster)
 
 	time.Sleep(2 * time.Second)
 
-	leader, err := findLeader(cluster)
+	leader, err := FindLeader(cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestClientInteraction_Follower(t *testing.T) {
 	config.ClusterSize = 3
 	config.HeartbeatTimeout = 500 * time.Millisecond
 	cluster, err := CreateLocalCluster(config)
-	defer cleanupCluster(cluster)
+	defer CleanupCluster(cluster)
 
 	time.Sleep(2 * time.Second)
 
