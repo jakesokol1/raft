@@ -179,7 +179,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 	var mtx sync.Mutex
 	fallback = false
 	numSuccess := atomic.NewInt32(0)
-	r.Out("Sending heartbeats...")
+	//r.Out("Sending heartbeats...")
 	for _, node := range r.Peers {
 		if node.Id == r.Self.Id {
 			numSuccess.Add(1)
@@ -225,7 +225,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 		}(&wg, node, numSuccess)
 	}
 	wg.Wait()
-	r.Out("Finished")
+	//r.Out("Finished")
 	return fallback, int(numSuccess.Load()) > len(r.Peers)/2
 }
 
