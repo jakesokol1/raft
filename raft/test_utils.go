@@ -75,3 +75,20 @@ func CleanupCluster(nodes []*Node) {
 	}
 	time.Sleep(5 * time.Second)
 }
+
+//prints last log index for all nodes in a cluster
+func PrintCluster(cluster []*Node) {
+	for _, node := range cluster {
+		node.Out("Last log index: %v", node.LastLogIndex())
+		node.Out("Leader: %v", node.Leader.Id)
+		node.Out("Last applied: %v", node.lastApplied)
+		node.Out("Commit index: %v", node.commitIndex)
+		printLog(node)
+	}
+}
+
+func printLog(node *Node) {
+	for i := 0; i < int(node.LastLogIndex()) + 1; i++ {
+		node.Out(node.GetLog(uint64(i)).String())
+	}
+}

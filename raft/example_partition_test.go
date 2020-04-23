@@ -7,7 +7,7 @@ import (
 )
 
 func TestPartition(t *testing.T) {
-	suppressLoggers()
+	//suppressLoggers()
 
 	cluster, err := createTestCluster([]int{5001, 5002, 5003, 5004, 5005})
 	defer CleanupCluster(cluster)
@@ -100,6 +100,7 @@ func TestPartition(t *testing.T) {
 	}
 
 	if !LogsMatch(newLeader, cluster) {
+		PrintCluster(cluster)
 		t.Errorf("logs incorrect")
 	}
 }
