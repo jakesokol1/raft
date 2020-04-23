@@ -11,7 +11,7 @@ func TestInit(t *testing.T) {
 	suppressLoggers()
 	config := DefaultConfig()
 	cluster, err := CreateLocalCluster(config)
-	defer cleanupCluster(cluster)
+	defer CleanupCluster(cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,14 +53,14 @@ func TestNewElection(t *testing.T) {
 	config.ClusterSize = 5
 
 	cluster, err := CreateLocalCluster(config)
-	defer cleanupCluster(cluster)
+	defer CleanupCluster(cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println("Sleep...........")
 	// wait for a leader to be elected
 	time.Sleep(time.Second * WaitPeriod)
-	oldLeader, err := findLeader(cluster)
+	oldLeader, err := FindLeader(cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestNewElection(t *testing.T) {
 	oldLeader.NetworkPolicy.PauseWorld(false)
 	time.Sleep(time.Second * WaitPeriod)
 
-	newLeader, err := findLeader(cluster)
+	newLeader, err := FindLeader(cluster)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -33,7 +33,7 @@ func createTestCluster(ports []int) ([]*Node, error) {
 }
 
 // Returns the leader in a raft cluster, and an error otherwise.
-func findLeader(nodes []*Node) (*Node, error) {
+func FindLeader(nodes []*Node) (*Node, error) {
 	leaders := make([]*Node, 0)
 	for _, node := range nodes {
 		if node.State == LeaderState {
@@ -51,7 +51,7 @@ func findLeader(nodes []*Node) (*Node, error) {
 }
 
 // Returns whether all logs in a cluster match the leader's.
-func logsMatch(leader *Node, nodes []*Node) bool {
+func LogsMatch(leader *Node, nodes []*Node) bool {
 	for _, node := range nodes {
 		if node.State != LeaderState {
 			if bytes.Compare(node.stateMachine.GetState().([]byte), leader.stateMachine.GetState().([]byte)) != 0 {
@@ -64,7 +64,7 @@ func logsMatch(leader *Node, nodes []*Node) bool {
 
 // Given a slice of RaftNodes representing a cluster,
 // exits each node and removes its logs.
-func cleanupCluster(nodes []*Node) {
+func CleanupCluster(nodes []*Node) {
 	for i := 0; i < len(nodes); i++ {
 		node := nodes[i]
 		node.server.Stop()

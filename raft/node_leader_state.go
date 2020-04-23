@@ -50,35 +50,21 @@ func (r *Node) doLeader() stateFunction {
 			heartbeatTimeout = leaderTimeout()
 		case appendEntriesMsg := <-r.appendEntries:
 			r.Out("Leader got append entries message: " + string(appendEntriesMsg.request.Term))
-			if appendEntriesMsg.request.Leader == r.Self {
-				appendEntriesMsg.reply <- AppendEntriesReply{
-					Term:    r.GetCurrentTerm(),
-					Success: true,
-				}
-			} else {
-				if appendEntriesMsg.request.Term > r.GetCurrentTerm() {
-					r.Leader = appendEntriesMsg.request.Leader
-					r.handleAppendEntries(appendEntriesMsg)
-					return r.doFollower
-				} else {
-					appendEntriesMsg.reply <- AppendEntriesReply{
-						Term:    r.GetCurrentTerm(),
-						Success: false,
-					}
-				}
+			updated := r.updateTerm(appendEntriesMsg.request.Term)
+			//handle appendEntriesMsg
+			if _, fallback := r.handleAppendEntries(appendEntriesMsg); fallback || updated {
+				return r.doFollower
 			}
 		case requestVoteMsg := <-r.requestVote:
 			// step down and vote if candidate is more up to date, otherwise reject vote
-			r.Out("leader got requestVote: " + string(requestVoteMsg.request.Term))
-			if requestVoteMsg.request.Term > r.GetCurrentTerm() {
-				r.setCurrentTerm(requestVoteMsg.request.Term)
-				r.handleRequestVote(&requestVoteMsg)
+			//update term
+			updated := r.updateTerm(requestVoteMsg.request.Term)
+			//handle appendEntriesMsg
+			r.Out("Received vote request")
+			_ = r.handleRequestVote(&requestVoteMsg)
+			//only fallback case is if term is updated
+			if updated {
 				return r.doFollower
-			} else {
-				requestVoteMsg.reply <- RequestVoteReply{
-					Term:        r.GetCurrentTerm(),
-					VoteGranted: false,
-				}
 			}
 		case registerClientMsg := <-r.registerClient:
 			replyChan := registerClientMsg.reply
@@ -89,6 +75,7 @@ func (r *Node) doLeader() stateFunction {
 				Type:   CommandType_CLIENT_REGISTRATION,
 			}
 			r.stableStore.StoreLog(log)
+			//TODO: Waiting for send heartbeats will stall with a single broken node
 			fallback, sentToMajority := r.sendHeartbeats()
 			heartbeatTimeout = leaderTimeout()
 			if fallback {
@@ -182,7 +169,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 	var mtx sync.Mutex
 	fallback = false
 	numSuccess := atomic.NewInt32(0)
-	r.Out("Sending heartbeats...")
+	//r.Out("Sending heartbeats...")
 	for _, node := range r.Peers {
 		if node.Id == r.Self.Id {
 			numSuccess.Add(1)
@@ -228,7 +215,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 		}(&wg, node, numSuccess)
 	}
 	wg.Wait()
-	r.Out("Finished")
+	//r.Out("Finished")
 	return fallback, int(numSuccess.Load()) > len(r.Peers)/2
 }
 

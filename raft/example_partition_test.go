@@ -10,14 +10,14 @@ func TestPartition(t *testing.T) {
 	suppressLoggers()
 
 	cluster, err := createTestCluster([]int{5001, 5002, 5003, 5004, 5005})
-	defer cleanupCluster(cluster)
+	defer CleanupCluster(cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// wait for a leader to be elected
 	time.Sleep(time.Second * WaitPeriod)
-	leader, err := findLeader(cluster)
+	leader, err := FindLeader(cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestPartition(t *testing.T) {
 
 	// allow a new leader to be elected in partition of 3 nodes
 	time.Sleep(time.Second * WaitPeriod)
-	newLeader, err := findLeader(followers)
+	newLeader, err := FindLeader(followers)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestPartition(t *testing.T) {
 		t.Errorf("Old leader should fall back to the follower state after rejoining (was in %v state)", leader.State)
 	}
 
-	if !logsMatch(newLeader, cluster) {
+	if !LogsMatch(newLeader, cluster) {
 		t.Errorf("logs incorrect")
 	}
 }
