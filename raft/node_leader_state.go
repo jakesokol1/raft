@@ -100,8 +100,6 @@ func (r *Node) doLeader() stateFunction {
 					ClientId:   r.stableStore.LastLogIndex(),
 					LeaderHint: r.Self,
 				}
-				// COMMIT ENTRY
-				//r.processLogEntry(*log)
 			} else {
 				replyChan <- RegisterClientReply{
 					Status:     ClientStatus_REQ_FAILED,
@@ -110,11 +108,18 @@ func (r *Node) doLeader() stateFunction {
 				}
 			}
 		case clientRequestMsg := <-r.clientRequest:
-			// todo: append entry to local log, respond after entry applied to state machine
+			// append entry to local log, respond after entry applied to state machine
 			cachedReply, success := r.GetCachedReply(*clientRequestMsg.request)
+			cacheId := createCacheID(
+				clientRequestMsg.request.ClientId,
+				clientRequestMsg.request.SequenceNum)
+			oldChan := r.requestsByCacheID[cacheId]
 			if success {
-				// todo: reply to old reply channel, if exists
 				clientRequestMsg.reply <- *cachedReply
+				// reply to old reply channel, if exists
+				if oldChan != nil {
+					oldChan <- *cachedReply
+				}
 			} else {
 				log := &LogEntry{
 					Index:   r.stableStore.LastLogIndex() + 1,
@@ -122,11 +127,10 @@ func (r *Node) doLeader() stateFunction {
 					Type:    CommandType_STATE_MACHINE_COMMAND,
 					Command: clientRequestMsg.request.StateMachineCmd,
 					Data:    clientRequestMsg.request.Data,
-					// todo
-					CacheId: "",
+					CacheId: cacheId,
 				}
+				r.requestsByCacheID[cacheId] = clientRequestMsg.reply
 				r.stableStore.StoreLog(log)
-				r.processLogEntry(*log)
 			}
 		case shutdown := <-r.gracefulExit:
 			if shutdown {
@@ -146,7 +150,6 @@ func (r *Node) sendHeartbeatsHandler(fallChan chan bool) {
 func (r *Node) updateLeaderCommit() {
 	prevCommit := r.commitIndex
 	for _, entry := range r.stableStore.AllLogs()[prevCommit+1:] {
-		// todo fix to use marjorityValid
 		if majorityValid(entry.Index, r.matchIndex) {
 			r.commitIndex = entry.Index
 			r.processLogEntry(*entry)
