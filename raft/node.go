@@ -334,9 +334,11 @@ func (r *Node) updateCommitment(trialCommit uint64) {
 	for r.commitIndex > r.lastApplied {
 		r.lastApplied += 1
 		logEntry := r.GetLog(r.lastApplied)
-		msg, err := r.stateMachine.ApplyCommand(logEntry.Command, logEntry.Data)
-		if err != nil {
-			r.Error(string(msg))
+		if logEntry.Type == CommandType_STATE_MACHINE_COMMAND {
+			_, err := r.stateMachine.ApplyCommand(logEntry.Command, logEntry.Data)
+			if err != nil {
+				r.Error(err.Error())
+			}
 		}
 	}
 }
