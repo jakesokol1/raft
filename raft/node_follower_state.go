@@ -1,5 +1,7 @@
 package raft
 
+import "math"
+
 // doFollower implements the logic for a Raft node in the follower state.
 func (r *Node) doFollower() stateFunction {
 	r.Out("Transitioning to FollowerState")
@@ -131,14 +133,6 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 	}
 	//request must be from a valid leader, set leader if it is new
 	r.setLeader(request.Leader)
-	//check if heartbeat message
-	if request.Entries == nil {
-		msg.reply <- AppendEntriesReply{
-			Term:    r.GetCurrentTerm(),
-			Success: true,
-		}
-		return true, true
-	}
 	//check if indexing is proper for log update
 	if entry := r.GetLog(request.PrevLogIndex); entry == nil || entry.TermId != request.PrevLogTerm {
 		msg.reply <- AppendEntriesReply{
@@ -147,6 +141,28 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 		}
 		return true, true
 	}
+
+	//trial value is minimum of index of last new entry and commit index
+	//prev log index at this point is consistent with leader
+	trial := uint64(math.Min(float64(request.LeaderCommit), float64(request.PrevLogIndex)))
+	if request.Entries != nil {
+		//node will become consistent up to last entry of request
+		trial = uint64(math.Min(float64(request.LeaderCommit), float64(request.Entries[len(request.Entries) - 1].Index)))
+	}
+	//handle new commits and state machine work
+	defer func(trial uint64){
+		go r.updateCommitment(trial)
+	}(trial)
+
+	//check if heartbeat message
+	if request.Entries == nil {
+		msg.reply <- AppendEntriesReply{
+			Term:    r.GetCurrentTerm(),
+			Success: true,
+		}
+		return true, true
+	}
+
 	//truncate inconsistencies
 	for _, newEntry := range request.Entries {
 		ind := newEntry.Index
@@ -159,10 +175,8 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 	for _, entry := range request.Entries {
 		r.StoreLog(entry)
 	}
-	//handle new commits and state machine work
-	go r.updateCommitment(request.LeaderCommit)
+
 	//successful update, respond to leader
-	println("test")
 	msg.reply <- AppendEntriesReply{
 		Term:    r.GetCurrentTerm(),
 		Success: true,

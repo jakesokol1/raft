@@ -83,6 +83,7 @@ func PrintCluster(cluster []*Node) {
 		node.Out("Leader: %v", node.Leader.Id)
 		node.Out("Last applied: %v", node.lastApplied)
 		node.Out("Commit index: %v", node.commitIndex)
+		node.Out("State: %v", node.stateMachine.GetState())
 		printLog(node)
 	}
 }
