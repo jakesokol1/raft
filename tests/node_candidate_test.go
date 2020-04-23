@@ -61,7 +61,7 @@ func TestAppropriateLeaderFollowingMajorityPartition(t *testing.T) {
 
 	var liability *raft.Node
 	for _, node := range cluster {
-		if node != leader {
+		if node.Self.Id != leader.Self.Id {
 			liability = node
 			break
 		}
@@ -74,7 +74,7 @@ func TestAppropriateLeaderFollowingMajorityPartition(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cp.SendRequest(hashmachine.HashChainAdd, nil)
+	cp.SendRequest(hashmachine.HashChainInit, []byte{1, 2, 3, 4})
 
 	//time for replication
 	time.Sleep(time.Second * raft.WaitPeriod)

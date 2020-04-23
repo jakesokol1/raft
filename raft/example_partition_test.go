@@ -103,4 +103,5 @@ func TestPartition(t *testing.T) {
 		PrintCluster(cluster)
 		t.Errorf("logs incorrect")
 	}
+	PrintCluster(cluster)
 }

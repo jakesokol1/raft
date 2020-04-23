@@ -27,8 +27,9 @@ func TestFollowerConsistencyForStandardLeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	_, err = cp.SendRequest(hashmachine.HashChainInit, []byte{1, 2, 3, 4})
 	for i := 0; i < 5; i++ {
-		_, err = cp.SendRequest(hashmachine.HashChainAdd, nil)
+		_, err = cp.SendRequest(hashmachine.HashChainAdd, []byte{1, 2, 3, 4})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -43,6 +44,7 @@ func TestFollowerConsistencyForStandardLeader(t *testing.T) {
 		}
 		t.Fatal("logs do not match")
 	}
+	raft.PrintCluster(cluster)
 }
 
 //Test consistency with leader following network partition, also test appropriate change of term
@@ -78,8 +80,9 @@ func TestFollowerConsistencyForPartitionedLeader(t *testing.T) {
 		}
 	}
 	//perform some work on the leader and the non-paused node
+	_, err = cp.SendRequest(hashmachine.HashChainInit, []byte{1, 2, 3, 4})
 	for i := 0; i < 5; i++ {
-		_, err = cp.SendRequest(hashmachine.HashChainAdd, nil)
+		_, err = cp.SendRequest(hashmachine.HashChainAdd, []byte{1, 2, 3, 4})
 		if err != nil {
 			t.Fatal(err)
 		}

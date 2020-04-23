@@ -76,7 +76,9 @@ func (r *Node) doLeader() stateFunction {
 			}
 			r.stableStore.StoreLog(log)
 			//TODO: Waiting for send heartbeats will stall with a single broken node
+			r.Out("Starting request heartbeats...")
 			fallback, sentToMajority := r.sendHeartbeats()
+			r.Out("Finsihing request heartbeats...")
 			heartbeatTimeout = leaderTimeout()
 			if fallback {
 				return r.doFollower

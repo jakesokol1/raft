@@ -339,6 +339,9 @@ func (r *Node) updateCommitment(trialCommit uint64) {
 			if err != nil {
 				r.Error(err.Error())
 			}
+			r.Out("applying command")
+		} else {
+			r.Out("Non-state-machine-command")
 		}
 	}
 }
