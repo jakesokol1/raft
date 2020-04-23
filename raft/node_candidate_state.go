@@ -115,6 +115,11 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 		reply := <-replies
 		if reply == nil {
 			noVotes += 1
+			if noVotes > int(math.Floor(float64(r.config.ClusterSize)/2.)) {
+				fallback <- false
+				electionResults <- false
+				return
+			}
 			continue
 		}
 		//update term from reply
@@ -136,11 +141,12 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 			return
 		}
 		if noVotes > int(math.Floor(float64(r.config.ClusterSize)/2.)) {
-			fallback <- true
+			fallback <- false
 			electionResults <- false
 			return
 		}
 	}
+
 	r.Error("Impossible vote condition, reverting to follower")
 	fallback <- true
 	electionResults <- false
