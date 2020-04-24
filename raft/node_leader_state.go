@@ -29,9 +29,7 @@ func (r *Node) doLeader() stateFunction {
 		TermId: r.GetCurrentTerm(),
 		Type:   CommandType_NOOP,
 	}
-	println(r.LastLogIndex())
 	r.stableStore.StoreLog(&inauguralEntry)
-	println(r.LastLogIndex())
 	//create a channel for communication with concurrent heartbeats
 	fallbackChan := make(chan bool)
 	go r.sendHeartbeatsHandler(fallbackChan)
@@ -77,13 +75,12 @@ func (r *Node) doLeader() stateFunction {
 			r.stableStore.StoreLog(log)
 			//TODO: Waiting for send heartbeats will stall with a single broken node
 			r.Out("Starting request heartbeats...")
-			fallback, sentToMajority := r.sendHeartbeats()
+			resultChan := make(chan bool, 1)
+			go r.sendHeartbeats(resultChan)
+			appendResult := <-resultChan
 			r.Out("Finsihing request heartbeats...")
 			heartbeatTimeout = leaderTimeout()
-			if fallback {
-				return r.doFollower
-			}
-			if sentToMajority {
+			if appendResult {
 				replyChan <- RegisterClientReply{
 					Status:     ClientStatus_OK,
 					ClientId:   r.stableStore.LastLogIndex(),
@@ -131,7 +128,7 @@ func (r *Node) doLeader() stateFunction {
 
 func (r *Node) sendHeartbeatsHandler(fallChan chan bool) {
 
-	fallback, _ := r.sendHeartbeats()
+	fallback, _ := r.sendHeartbeats(nil)
 	r.updateLeaderCommit()
 	fallChan <- fallback
 }
@@ -165,13 +162,40 @@ func majorityValid(n uint64, matchIndex map[string]uint64) bool {
 // update them, and, if an index has made it to a quorum of nodes, commit
 // up to that index. Once committed to that index, the replicated state
 // machine should be given the new log entries via processLogEntry.
-func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
+func (r *Node) sendHeartbeats(majority chan bool) (fallback, sentToMajority bool) {
 	// todo: handle hanging rpcs
 	var wg sync.WaitGroup
 	var mtx sync.Mutex
 	fallback = false
 	numSuccess := atomic.NewInt32(0)
+	numReply := atomic.NewInt32(0)
+	isWaiting := atomic.NewBool(true)
 	//r.Out("Sending heartbeats...")
+	if majority != nil {
+		go func(isWaiting *atomic.Bool) {
+			timeout := time.After(RPCTimeout / 2)
+			for isWaiting.Load() {
+				select {
+				case <-timeout:
+					majority <- false
+					println("REGISTRATION TIMEOUT")
+					return
+				default:
+					if int(numReply.Load()) > len(r.Peers)/2 {
+						if int(numSuccess.Load()) > len(r.Peers)/2 {
+							println("MAJORITY REACHED")
+							majority <- true
+							return
+						} else {
+							println("FAILED REG")
+							majority <- false
+							return
+						}
+					}
+				}
+			}
+		}(isWaiting)
+	}
 	for _, node := range r.Peers {
 		if node.Id == r.Self.Id {
 			numSuccess.Add(1)
@@ -197,6 +221,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 				}
 				return
 			}
+			numReply.Add(1)
 			mtx.Lock()
 			if reply.Term > r.GetCurrentTerm() {
 				r.setCurrentTerm(reply.Term)
@@ -208,7 +233,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 				r.matchIndex[node.GetAddr()] = r.LastLogIndex()
 				numSuccess.Add(1)
 			} else {
-				println("f")
+				//println("f")
 				if r.nextIndex[node.GetAddr()] != 0 {
 					r.nextIndex[node.GetAddr()]--
 				}
@@ -217,6 +242,7 @@ func (r *Node) sendHeartbeats() (fallback, sentToMajority bool) {
 		}(&wg, node, numSuccess)
 	}
 	wg.Wait()
+	isWaiting.Store(false)
 	//r.Out("Finished")
 	return fallback, int(numSuccess.Load()) > len(r.Peers)/2
 }
