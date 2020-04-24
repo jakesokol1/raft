@@ -71,7 +71,6 @@ func (r *Node) doCandidate() stateFunction {
 			}
 		}
 	}
-	return nil
 }
 
 // requestVotes is called to request votes from all other nodes. It takes in a
@@ -114,8 +113,6 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 		if reply == nil {
 			noVotes += 1
 			if noVotes > int(r.config.ClusterSize/2) {
-				fallback <- false
-				electionResults <- false
 				return
 			}
 			continue
@@ -139,21 +136,8 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 			return
 		}
 		if noVotes > int(r.config.ClusterSize/2) {
-			fallback <- false
-			electionResults <- false
 			return
 		}
 	}
-
-	r.Error("Impossible vote condition, reverting to follower")
 	fallback <- true
-	electionResults <- false
-}
-
-// handleCompetingRequestVote handles an incoming vote request when the current
-// node is in the candidate or leader state. It returns true if the caller
-// should fall back to the follower state, false otherwise.
-func (r *Node) handleCompetingRequestVote(msg RequestVoteMsg) (fallback bool) {
-	//Don't need to do this for our implementation I think
-	return
 }
