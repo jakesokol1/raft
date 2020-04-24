@@ -48,6 +48,7 @@ func TestFollowerConsistencyForStandardLeader(t *testing.T) {
 }
 
 //Test consistency with leader following network partition, also test appropriate change of term
+//this test also checks for appropriate states for nodes on different sides of the partition
 func TestFollowerConsistencyForPartitionedLeader(t *testing.T) {
 	//create cluster
 	config := raft.DefaultConfig()
@@ -98,9 +99,11 @@ func TestFollowerConsistencyForPartitionedLeader(t *testing.T) {
 		t.Fatal("No isolated node")
 	}
 	//TODO: Change this to comparing logs when state is actually working
-	if isolatedNode.LastLogIndex() >= leader.LastLogIndex() {
+	if raft.LogsMatch(leader, cluster) {
 		t.Fatal("Isolated node matches non-isolated nodes")
 	}
+	raft.PrintCluster(cluster)
+
 	if isolatedNode.State != raft.CandidateState {
 		t.Fatal("Isolated node should be in candidate state, actual state: ", isolatedNode.State.String(),
 			isolatedNode.Self.Id)
@@ -117,4 +120,6 @@ func TestFollowerConsistencyForPartitionedLeader(t *testing.T) {
 	if cluster[0].GetCurrentTerm() < 2 {
 		t.Fatal("Term update failure")
 	}
+
+	raft.PrintCluster(cluster)
 }

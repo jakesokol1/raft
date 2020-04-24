@@ -126,3 +126,37 @@ func TestStochasticHecticNetwork(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 }
+
+func TestStaysAsCandidate(t *testing.T) {
+	//create cluster
+	config := raft.DefaultConfig()
+	config.ClusterSize = 5
+	cluster, err := raft.CreateLocalCluster(config)
+	defer raft.CleanupCluster(cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Second * raft.WaitPeriod)
+
+	leader, err := raft.FindLeader(cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var iso *raft.Node
+	for _, node := range cluster {
+		if node.Self.Id != leader.Self.Id {
+			iso = node
+			iso.NetworkPolicy.PauseWorld(true)
+			break
+		}
+	}
+
+	time.Sleep(time.Second * raft.WaitPeriod)
+
+	if iso.State != raft.CandidateState {
+		t.Fatal()
+	}
+
+}

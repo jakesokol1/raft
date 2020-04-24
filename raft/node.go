@@ -251,7 +251,7 @@ type RegisterClientMsg struct {
 // reply channel to the stateFunction. If the cluster hasn't started yet, it
 // returns the corresponding RegisterClientReply.
 func (r *Node) RegisterClient(req *RegisterClientRequest) RegisterClientReply {
-	r.Debug("RegisterClientRequest received")
+	r.Out("RegisterClientRequest received")
 	reply := make(chan RegisterClientReply)
 
 	// If cluster hasn't started yet, return

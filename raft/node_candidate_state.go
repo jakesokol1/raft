@@ -1,7 +1,5 @@
 package raft
 
-import "math"
-
 // doCandidate implements the logic for a Raft node in the candidate state.
 func (r *Node) doCandidate() stateFunction {
 	r.Out("Transitioning to CandidateState")
@@ -115,7 +113,7 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 		reply := <-replies
 		if reply == nil {
 			noVotes += 1
-			if noVotes > int(math.Floor(float64(r.config.ClusterSize)/2.)) {
+			if noVotes > int(r.config.ClusterSize/2) {
 				fallback <- false
 				electionResults <- false
 				return
@@ -134,13 +132,13 @@ func (r *Node) requestVotes(electionResults chan bool, fallback chan bool, currT
 		} else {
 			noVotes += 1
 		}
-		if yesVotes >= int(math.Ceil(float64(r.config.ClusterSize)/2.)) {
+		if yesVotes > int(r.config.ClusterSize/2) {
 			r.Out("Number yes votes: %v", yesVotes)
 			fallback <- false
 			electionResults <- true
 			return
 		}
-		if noVotes > int(math.Floor(float64(r.config.ClusterSize)/2.)) {
+		if noVotes > int(r.config.ClusterSize/2) {
 			fallback <- false
 			electionResults <- false
 			return
