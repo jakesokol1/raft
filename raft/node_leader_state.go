@@ -73,7 +73,6 @@ func (r *Node) doLeader() stateFunction {
 				Type:   CommandType_CLIENT_REGISTRATION,
 			}
 			r.stableStore.StoreLog(log)
-			//TODO: Waiting for send heartbeats will stall with a single broken node
 			r.Out("Starting request heartbeats...")
 			resultChan := make(chan bool, 1)
 			go r.sendHeartbeats(resultChan)
@@ -163,7 +162,6 @@ func majorityValid(n uint64, matchIndex map[string]uint64) bool {
 // up to that index. Once committed to that index, the replicated state
 // machine should be given the new log entries via processLogEntry.
 func (r *Node) sendHeartbeats(majority chan bool) (fallback, sentToMajority bool) {
-	// todo: handle hanging rpcs
 	var wg sync.WaitGroup
 	var mtx sync.Mutex
 	fallback = false
