@@ -89,7 +89,7 @@ func PrintCluster(cluster []*Node) {
 }
 
 func printLog(node *Node) {
-	for i := 0; i < int(node.LastLogIndex()) + 1; i++ {
+	for i := 0; i < int(node.LastLogIndex())+1; i++ {
 		node.Out(node.GetLog(uint64(i)).String())
 	}
 }

@@ -25,7 +25,7 @@ func TestHandleAppendEntriesFollower(t *testing.T) {
 	}
 
 	var follower *raft.Node
-	for _, node := range cluster{
+	for _, node := range cluster {
 		if node.Self.Id != leader.Self.Id {
 			follower = node
 			break
@@ -39,26 +39,26 @@ func TestHandleAppendEntriesFollower(t *testing.T) {
 	}
 
 	fakeLeader := raft.RemoteNode{
-		Addr:                 "test",
-		Id:                   "fakeLeader",
+		Addr: "test",
+		Id:   "fakeLeader",
 	}
 
 	requestOutOfDate := raft.AppendEntriesRequest{
-		Term:                 follower.GetCurrentTerm() - 1,
-		Leader:               &fakeLeader,
-		PrevLogIndex:         0,
-		PrevLogTerm:          0,
-		Entries:              nil,
-		LeaderCommit:		  0,
+		Term:         follower.GetCurrentTerm() - 1,
+		Leader:       &fakeLeader,
+		PrevLogIndex: 0,
+		PrevLogTerm:  0,
+		Entries:      nil,
+		LeaderCommit: 0,
 	}
 
 	requestValid := raft.AppendEntriesRequest{
-		Term:                 follower.GetCurrentTerm() + 1,
-		Leader:               &fakeLeader,
-		PrevLogIndex:         0,
-		PrevLogTerm:          0,
-		Entries:              nil,
-		LeaderCommit:         0,
+		Term:         follower.GetCurrentTerm() + 1,
+		Leader:       &fakeLeader,
+		PrevLogIndex: 0,
+		PrevLogTerm:  0,
+		Entries:      nil,
+		LeaderCommit: 0,
 	}
 
 	reply := follower.AppendEntries(&requestOutOfDate)
@@ -91,7 +91,7 @@ func TestHandleAppendEntriesCandidate(t *testing.T) {
 	}
 
 	var candidate *raft.Node
-	for _, node := range cluster{
+	for _, node := range cluster {
 		if node.Self.Id != leader.Self.Id {
 			candidate = node
 			break
@@ -114,26 +114,26 @@ func TestHandleAppendEntriesCandidate(t *testing.T) {
 	}
 
 	fakeLeader := raft.RemoteNode{
-		Addr:                 "test",
-		Id:                   "fakeLeader",
+		Addr: "test",
+		Id:   "fakeLeader",
 	}
 
 	requestOutOfDate := raft.AppendEntriesRequest{
-		Term:                 candidate.GetCurrentTerm() - 1,
-		Leader:               &fakeLeader,
-		PrevLogIndex:         0,
-		PrevLogTerm:          0,
-		Entries:              nil,
-		LeaderCommit:		  0,
+		Term:         candidate.GetCurrentTerm() - 1,
+		Leader:       &fakeLeader,
+		PrevLogIndex: 0,
+		PrevLogTerm:  0,
+		Entries:      nil,
+		LeaderCommit: 0,
 	}
 
 	requestValid := raft.AppendEntriesRequest{
-		Term:                 candidate.GetCurrentTerm() + 1,
-		Leader:               &fakeLeader,
-		PrevLogIndex:         0,
-		PrevLogTerm:          0,
-		Entries:              nil,
-		LeaderCommit:         0,
+		Term:         candidate.GetCurrentTerm() + 1,
+		Leader:       &fakeLeader,
+		PrevLogIndex: 0,
+		PrevLogTerm:  0,
+		Entries:      nil,
+		LeaderCommit: 0,
 	}
 
 	response := candidate.AppendEntries(&requestOutOfDate)
@@ -172,26 +172,26 @@ func TestHandleAppendEntriesLeader(t *testing.T) {
 	}
 
 	fakeLeader := raft.RemoteNode{
-		Addr:                 "test",
-		Id:                   "fakeLeader",
+		Addr: "test",
+		Id:   "fakeLeader",
 	}
 
 	requestOutOfDate := raft.AppendEntriesRequest{
-		Term:                 leader.GetCurrentTerm() - 1,
-		Leader:               &fakeLeader,
-		PrevLogIndex:         0,
-		PrevLogTerm:          0,
-		Entries:              nil,
-		LeaderCommit:		  0,
+		Term:         leader.GetCurrentTerm() - 1,
+		Leader:       &fakeLeader,
+		PrevLogIndex: 0,
+		PrevLogTerm:  0,
+		Entries:      nil,
+		LeaderCommit: 0,
 	}
 
 	requestValid := raft.AppendEntriesRequest{
-		Term:                 leader.GetCurrentTerm() + 1,
-		Leader:               &fakeLeader,
-		PrevLogIndex:         0,
-		PrevLogTerm:          0,
-		Entries:              nil,
-		LeaderCommit:         0,
+		Term:         leader.GetCurrentTerm() + 1,
+		Leader:       &fakeLeader,
+		PrevLogIndex: 0,
+		PrevLogTerm:  0,
+		Entries:      nil,
+		LeaderCommit: 0,
 	}
 
 	response := leader.AppendEntries(&requestOutOfDate)

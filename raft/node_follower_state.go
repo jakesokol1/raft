@@ -147,10 +147,10 @@ func (r *Node) handleAppendEntries(msg AppendEntriesMsg) (resetTimeout, fallback
 	trial := uint64(math.Min(float64(request.LeaderCommit), float64(request.PrevLogIndex)))
 	if request.Entries != nil {
 		//node will become consistent up to last entry of request
-		trial = uint64(math.Min(float64(request.LeaderCommit), float64(request.Entries[len(request.Entries) - 1].Index)))
+		trial = uint64(math.Min(float64(request.LeaderCommit), float64(request.Entries[len(request.Entries)-1].Index)))
 	}
 	//handle new commits and state machine work
-	defer func(trial uint64){
+	defer func(trial uint64) {
 		go r.updateCommitment(trial)
 	}(trial)
 
